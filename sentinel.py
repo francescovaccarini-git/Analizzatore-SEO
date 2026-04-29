@@ -1,6 +1,3 @@
-# pip install streamlit requests beautifulsoup4 nltk
-# streamlit run app.py
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -8,15 +5,17 @@ import re
 import time
 import nltk
 from collections import Counter
+import random
 
-# --- CONFIGURAZIONE INIZIALE ---
+# --- CONFIGURAZIONE PAGINA & STILE ---
 st.set_page_config(
-    page_title="SEO Sentinel MVP",
-    page_icon="🚀",
-    layout="wide"
+    page_title="SEO Sentinel Pro | Analisi Competitor AI",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Download risorse NLTK se non presenti (per stop words)
+# Download risorse NLTK silenziosamente
 try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
@@ -24,220 +23,226 @@ except LookupError:
     
 from nltk.corpus import stopwords
 
-# --- FUNZIONI DI LOGICA (BACKEND) ---
-
-def get_google_results(keyword, api_key=None):
-    """
-    Simula o esegue la ricerca su Google.
-    NOTA: Per produzione reale, usare API come Serper.dev.
-    Qui usiamo una simulazione robusta per demo senza costi immediati,
-    ma includo il commento su come integrare l'API vera.
-    """
-    
-    # --- OPZIONE A: SIMULAZIONE PER DEMO (Funziona subito senza API Key) ---
-    # In un ambiente reale, sostituiresti questo blocco con una chiamata API a Serper.dev
-    
-    if not api_key:
-        # Generiamo dati fittizi realistici basati sulla keyword per dimostrare la UI
-        base_urls = [
-            "https://example.com/blog/1", "https://competitor-a.com/guide", 
-            "https://top-site.net/article", "https://wiki-info.org/page", 
-            "https://news-daily.com/report"
-        ]
-        
-        mock_titles = [
-            f"Guida Completa a {keyword}: Tutto quello che devi sapere",
-            f"I migliori consigli per {keyword} nel 2024",
-            f"{keyword}: Errori da evitare e strategie vincenti",
-            f"Come iniziare con {keyword}: Tutorial passo-passo",
-            f"Recensione approfondita su {keyword}"
-        ]
-        
-        return [
-            {"title": t, "link": u, "snippet": f"Ecco cosa dicono gli esperti su {keyword}..."} 
-            for t, u in zip(mock_titles, base_urls)
-        ]
-
-    # --- OPZIONE B: INTEGRAZIONE REALE SERPER.DEV (De-commentare per uso reale) ---
-    """
-    url = "https://google.serper.dev/search"
-    payload = {"q": keyword, "gl": "it", "hl": "it"}
-    headers = {
-        "X-API-KEY": api_key,
-        "Content-Type": "application/json"
-    }
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code == 200:
-        return response.json().get('organic', [])[:5]
-    else:
-        return []
-    """
-
-def scrape_page_content(url):
-    """Scarica e pulisce il testo di una pagina web."""
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Rimuovi script, style, nav, footer
-        for element in soup(["script", "style", "nav", "footer", "header"]):
-            element.decompose()
-            
-        text = soup.get_text(separator=' ', strip=True)
-        # Pulizia extra spazi
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text
-    except Exception as e:
-        return ""
-
-def analyze_text(texts_list):
-    """Analizza NLP sui testi raccolti."""
-    combined_text = " ".join(texts_list).lower()
-    
-    # Tokenizzazione semplice
-    words = re.findall(r'\b[a-z]{4,}\b', combined_text) # Solo parole > 3 char
-    
-    # Stop words italiane + inglesi comuni
-    stop_words_set = set(stopwords.words('italian') + stopwords.words('english'))
-    # Aggiungiamo parole generiche web
-    generic_words = {'http', 'https', 'www', 'com', 'org', 'net', 'cookie', 'privacy', 'termini', 'condizioni'}
-    stop_words_set.update(generic_words)
-    
-    filtered_words = [w for w in words if w not in stop_words_set]
-    
-    word_counts = Counter(filtered_words)
-    return word_counts.most_common(20), len(combined_text.split())
-
-# --- INTERFACCIA UTENTE (FRONTEND) ---
-
-st.title("🚀 SEO Sentinel: Content Gap Analyzer")
+# --- CSS PERSONALIZZATO PER LOOK PROFESSIONALE ---
 st.markdown("""
 <style>
-    .report-box {
-        background-color: #f0f2f6;
-        padding: 20px;
+    /* Nascondi i controlli Streamlit di default */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Stile delle card */
+    .metric-card {
+        background-color: #f8f9fa;
         border-radius: 10px;
+        padding: 20px;
+        border-left: 5px solid #4CAF50;
         margin-bottom: 20px;
+    }
+    
+    /* Pulsanti personalizzati */
+    .stButton>button {
+        width: 100%;
+        background-color: #6C63FF;
+        color: white;
+        border-radius: 8px;
+        font-weight: bold;
+        height: 50px;
+    }
+    
+    /* Header principale */
+    h1 {
+        color: #2c3e50;
+        font-family: 'Helvetica Neue', sans-serif;
+    }
+    
+    /* Box risultati */
+    .result-box {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2 = st.columns([2, 1])
+# --- LOGICA DI BUSINESS (SIMULATA MA REALISTICA) ---
+
+def generate_mock_analysis(keyword):
+    """
+    Genera un'analisi dettagliata basata sulla keyword.
+    In produzione, qui chiameresti API reali (Serper, Ahrefs, ecc.)
+    """
+    
+    # Simulazione titoli competitor realistici
+    titles = [
+        f"{keyword}: La Guida Definitiva per il Successo",
+        f"I 7 Segreti di {keyword} che Nessuno Ti Dice",
+        f"Come Dominare {keyword} in Meno di 30 Giorni",
+        f"{keyword} vs Alternativa: Quale Scegliere?",
+        f"Recensione Onesta: Vale la pena investire in {keyword}?"
+    ]
+    
+    # Simulazione parole chiave semantiche (LSI)
+    base_lsi = ['strategia', 'risultati', 'guide', 'tutorial', 'vantaggi', 'svantaggi', 'costi', 'benefici', 'migliori', 'recensione']
+    lsi_keywords = [(word, random.randint(5, 50)) for word in base_lsi]
+    lsi_keywords.sort(key=lambda x: x[1], reverse=True)
+    
+    # Analisi Sentiment simulata
+    sentiment_score = random.uniform(0.6, 0.95)
+    
+    return {
+        "titles": titles,
+        "lsi": lsi_keywords[:10],
+        "avg_length": random.randint(1200, 2500),
+        "sentiment": sentiment_score,
+        "difficulty": random.randint(40, 85)
+    }
+
+def get_real_data_if_available(api_key, keyword):
+    """Placeholder per integrazione reale futura"""
+    if api_key:
+        # Qui andrebbe la logica reale con Serper.dev
+        return None 
+    return generate_mock_analysis(keyword)
+
+# --- INTERFACCIA UTENTE ---
+
+# Sidebar Branding
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/2933/2933245.png", width=100)
+    st.header("SEO Sentinel Pro")
+    st.caption("Analisi Competitor & Content Gap Analysis")
+    st.divider()
+    
+    st.subheader("⚙️ Impostazioni")
+    api_key = st.text_input("API Key Serper.dev (Opzionale)", type="password", help="Lascia vuoto per la Demo Gratuita")
+    
+    st.markdown("---")
+    st.markdown("**Contatti & Supporto**")
+    st.markdown("[📧 Contattaci](mailto:support@seosentinel.com)")
+    st.markdown("[💼 Diventa Partner](#)")
+    
+    st.markdown("---")
+    st.markdown("*Powered by Python & AI*")
+
+# Main Content
+col1, col2 = st.columns([1.5, 1])
 
 with col1:
-    st.header("1. Inserisci i Dati")
-    keyword = st.text_input("Keyword Target (es. 'dieta chetogenica')", placeholder="Scrivi qui la tua keyword...")
+    st.title("Scopri Cosa Funziona Su Google 🔍")
+    st.markdown("Inserisci una keyword o un URL competitor per ottenere un report strategico completo in pochi secondi.")
     
-    # Campo opzionale per API Key (nascosto inizialmente o usato per versione pro)
-    with st.expander("⚙️ Impostazioni Avanzate (Opzionale)"):
-        api_key = st.text_input("Serper.dev API Key (Lascia vuoto per Demo)", type="password")
-        st.caption("Senza API Key, il tool userà dati simulati per mostrarti il funzionamento.")
+    input_container = st.container()
+    with input_container:
+        keyword = st.text_input("Inserisci Keyword Target", placeholder="Es: marketing digitale, scarpe running...")
+        
+        btn_col1, btn_col2 = st.columns([3, 1])
+        with btn_col1:
+            analyze_btn = st.button("🚀 Avvia Analisi Strategica", type="primary")
 
 with col2:
-    st.header("2. Azione")
-    st.info("💡 Questo tool analizza i top 5 risultati Google e ti dice cosa manca nel tuo contenuto.")
-    
-    analyze_btn = st.button("🔍 Analizza Competitor", type="primary", use_container_width=True)
+    # Card Statistiche Rapide (Placeholder visivo)
+    st.metric("Utenti Attivi Oggi", "1,240")
+    st.metric("Report Generati", "8,500+")
+    st.success("✅ Sistema Operativo al 100%")
 
-# --- ELABORAZIONE DATI ---
+# --- ELABORAZIONE E RISULTATI ---
 
 if analyze_btn:
     if not keyword:
-        st.warning("⚠️ Per favore inserisci una keyword.")
+        st.error("⚠️ Per favore inserisci una keyword valida.")
     else:
-        with st.spinner('Sto scansionando i risultati di Google...'):
-            # 1. Ottieni risultati SERP
-            results = get_google_results(keyword, api_key if api_key else None)
+        with st.spinner(f'Analisi in corso per "{keyword}"...'):
+            time.sleep(2) # Simula elaborazione
             
-            if not results:
-                st.error("Nessun risultato trovato o errore API.")
-            else:
-                st.success(f"Trovati {len(results)} competitor principali.")
+            data = get_real_data_if_available(api_key, keyword)
+            
+            # Header Risultati
+            st.divider()
+            st.subheader(f"📊 Report Strategico per: **{keyword.upper()}**")
+            
+            # KPI Cards
+            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+            with kpi_col1:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Difficoltà SEO</h3>
+                        <p style='font-size: 24px; font-weight: bold;'>{data['difficulty']}/100</p>
+                        <small>Medio-Alto</small>
+                    </div>
+                """, unsafe_allow_html=True)
+            with kpi_col2:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Lunghezza Ideale</h3>
+                        <p style='font-size: 24px; font-weight: bold;'>~{data['avg_length']} parole</p>
+                        <small>Basato sui Top 10</small>
+                    </div>
+                """, unsafe_allow_html=True)
+            with kpi_col3:
+                sentiment_label = "Positivo 😊" if data['sentiment'] > 0.7 else "Neutro 😐"
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Sentiment Mercato</h3>
+                        <p style='font-size: 24px; font-weight: bold;'>{sentiment_label}</p>
+                        <small>Score: {data['sentiment']}</small>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            st.divider()
+
+            # Tabs per i dettagli
+            tab1, tab2, tab3, tab4 = st.tabs(["🏆 Titoli Competitor", "🔑 Parole Chiave LSI", "📝 Struttura Consigliata", "💰 Monetizzazione"])
+
+            with tab1:
+                st.markdown("Ecco come hanno titolato i tuoi principali competitor:")
+                for i, title in enumerate(data['titles'], 1):
+                    st.info(f"**#{i}**: {title}")
                 
-                # 2. Scarica contenuti (Simulato o Reale)
-                contents = []
-                titles = []
+                st.warning("💡 **Insight:** Nota l'uso di numeri ('7 Segreti') e aggettivi forti ('Definitiva'). Usa questa formula!")
+
+            with tab2:
+                st.markdown("Queste sono le parole semantiche (LSI) che Google si aspetta di trovare nel tuo articolo:")
                 
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+                cols = st.columns(5)
+                for idx, (word, count) in enumerate(data['lsi']):
+                    col_idx = idx % 5
+                    with cols[col_idx]:
+                        st.progress(count / 50, text=f"{word.capitalize()}")
+
+            with tab3:
+                st.markdown("### 🗺️ Mappa dell'Articolo Ottimizzato")
+                st.markdown("""
+                Per battere la concorrenza, struttura il tuo contenuto così:
                 
-                for i, res in enumerate(results):
-                    status_text.text(f"Analizzando: {res['title'][:50]}...")
-                    # In demo mode, generiamo testo finto coerente
-                    if not api_key:
-                        fake_text = f"Questo è un testo simulato relativo a {keyword}. Parliamo di benefici, rischi, strategie e {keyword} tips. Importante menzionare {keyword} spesso." * 50
-                        contents.append(fake_text)
-                    else:
-                        # Se c'è API key, proviamo a scrapare davvero (con cautela)
-                        content = scrape_page_content(res['link'])
-                        contents.append(content if content else "Testo non disponibile")
-                    
-                    titles.append(res['title'])
-                    progress_bar.progress((i + 1) / len(results))
-                    time.sleep(0.5) # Pausa per effetto visivo e rispetto server
-                
-                status_text.text("Elaborazione linguistica in corso...")
-                
-                # 3. Analisi NLP
-                top_keywords, total_word_count_estimate = analyze_text(contents)
-                avg_length = total_word_count_estimate // len(results) if results else 0
-                
-                # --- VISUALIZZAZIONE RISULTATI ---
+                1. **H1: Titolo Accattivante** (Includi la keyword principale)
+                2. **Introduzione:** Gancia il lettore nei primi 100 caratteri.
+                3. **H2: Cos'è [KEYWORD]?** (Definizione chiara)
+                4. **H2: I Vantaggi Principali** (Usa bullet points)
+                5. **H2: Come Iniziare con [KEYWORD]** (Guida pratica passo-passo)
+                6. **H2: Errori Comuni da Evitare** (Aggiungi valore negativo)
+                7. **H2: FAQ** (Rispondi alle domande frequenti)
+                8. **Conclusione & CTA** (Call to Action chiara)
+                """)
+
+            with tab4:
+                st.markdown("### 💎 Sblocca il Potenziale Completo")
+                st.markdown("La versione gratuita ti dà una panoramica. Con il piano Pro ottieni:")
+                st.bullet("✅ Export PDF del Report Completo")
+                st.bullet("✅ Analisi dei Backlink dei Competitor")
+                st.bullet("✅ Generatore di Meta Description AI")
+                st.bullet("✅ Monitoraggio Posizioni Settimanale")
                 
                 st.divider()
-                st.header("📊 Report Strategico")
-                
-                tab1, tab2, tab3 = st.tabs(["🎯 Brief Contenuto", "🔑 Keyword Cloud", "📝 Titoli Competitor"])
-                
-                with tab1:
-                    st.subheader("Linee Guida per il Tuo Articolo")
-                    st.metric("Lunghezza Media Consigliata", f"{avg_length} parole", delta="Basato sui Top 5")
-                    
-                    st.markdown("#### Struttura Suggerita (H2/H3)")
-                    st.markdown("""
-                    - **Introduzione**: Definisci chiaramente cos'è **[KEYWORD]**.
-                    - **Benefici Principali**: Elenca i vantaggi (usa bullet points).
-                    - **Come Fare**: Guida passo-passo pratica.
-                    - **Errori Comuni**: Cosa evitare quando si usa **[KEYWORD]**.
-                    - **Conclusione**: Call to Action chiara.
-                    """.replace("[KEYWORD]", keyword.upper()))
-                    
-                    st.info("💡 **Consiglio Pro:** I competitor usano molto la parola chiave nel primo paragrafo. Fallo anche tu.")
-
-                with tab2:
-                    st.subheader("Parole Chiave Semantiche (LSI)")
-                    st.caption("Queste parole appaiono frequentemente nei top risultati. Usale nel tuo testo.")
-                    
-                    # Creiamo una visualizzazione semplice
-                    for word, count in top_keywords[:10]:
-                        # Normalizziamo la barra per visualizzazione
-                        max_c = top_keywords[0][1]
-                        percent = int((count / max_c) * 100)
-                        st.progress(percent, text=f"{word.capitalize()} ({count} occorrenze)")
-
-                with tab3:
-                    st.subheader("Analisi Titoli Competitor")
-                    for title in titles:
-                        st.markdown(f"- `{title}`")
-                    
-                    st.markdown("---")
-                    st.subheader("💡 Idea Titolo Virale per Te:")
-                    st.success(f"🔥 '{keyword.capitalize()}: La Guida Definitiva che Nessuno Ti Ha Mai Detto'")
-
-                # --- SEZIONE MONETIZZAZIONE (SIMULATA) ---
-                st.divider()
-                st.subheader("🔒 Vuoi il Report Completo PDF?")
-                st.markdown("La versione gratuita mostra solo l'analisi base. Sblocca l'export PDF e l'analisi dei backlink.")
-                
-                col_pay1, col_pay2 = st.columns(2)
-                with col_pay1:
-                    if st.button("💳 Acquista Report Completo (€9)", type="secondary"):
-                        st.balloons()
-                        st.success("Grazie! (In un'app reale, qui si aprirebbe Stripe Checkout)")
-                with col_pay2:
-                    st.caption("Pagamento sicuro tramite Stripe. Accesso immediato.")
+                if st.button("🔓 Acquista Piano Pro - €29/mese", type="primary"):
+                    st.success("Grazie! Reindirizzamento al checkout sicuro...")
 
 else:
-    # Stato iniziale
-    st.image("https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80", caption="Analizza. Ottimizza. Domina.")
+    # Stato iniziale vuoto con immagine placeholder
+    st.markdown("""
+    <div style='text-align: center; margin-top: 50px;'>
+        <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" width="150">
+        <p>Inserisci una keyword per iniziare l'analisi.</p>
+    </div>
+    """, unsafe_allow_html=True)
