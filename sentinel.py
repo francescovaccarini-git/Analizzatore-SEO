@@ -10,7 +10,7 @@ import os
 
 # --- CONFIGURAZIONE PAGINA & STILE ---
 st.set_page_config(
-    page_title="SEO Sentinel Pro | Analisi Competitor AI",
+    page_title="SEO Sentinel Pro | Analisi Competitor AI By Franky",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -97,7 +97,8 @@ def generate_mock_analysis(keyword):
         "lsi": lsi_keywords[:10],
         "avg_length": random.randint(1200, 2500),
         "sentiment": sentiment_score,
-        "difficulty": random.randint(40, 85)
+        "difficulty": random.randint(40, 85),
+        "intent": random.choice(["Informativo", "Transazionale", "Navigazionale"])
     }
 
 def get_real_data_if_available(api_key, keyword):
@@ -115,21 +116,12 @@ def call_llm_hf(prompt):
     Usa il modello Mistral-7B-Instruct-v0.2.
     """
     
-    # OTTENIAMO LA CHIAVE API DALLE VARIABILI D'AMBIENTE (Streamlit Secrets)
-    # Se sei in locale e non hai impostato le variabili d'ambiente, 
-    # puoi decommentare la riga sotto e inserire la chiave manualmente per test.
-    
     hf_token = os.getenv("HF_API_KEY")
     
-    # <--- OPZIONALE: Per test locali senza variabili d'ambiente --->
-    # hf_token = "qui_incolla_il_tuo_token_hf_copiato_da_huggingface" 
-    
     if not hf_token:
-        return "Errore: Chiave API Hugging Face non configurata. Inserisci HF_API_KEY nei Secrets di Streamlit."
+        return "❌ Errore: Chiave API Hugging Face non configurata. Inserisci HF_API_KEY nei Secrets di Streamlit."
     
-    # Usiamo Mistral 7B Instruct, un modello molto bravo e veloce
     model_id = "mistralai/Mistral-7B-Instruct-v0.2"
-    
     url = f"https://api-inference.huggingface.co/models/{model_id}"
     
     headers = {
@@ -140,9 +132,9 @@ def call_llm_hf(prompt):
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 500, # Lunghezza massima della risposta
-            "return_full_text": False, # Non ripetere la domanda
-            "temperature": 0.7 # Creatività media
+            "max_new_tokens": 500,
+            "return_full_text": False,
+            "temperature": 0.7
         }
     }
     
@@ -150,20 +142,43 @@ def call_llm_hf(prompt):
         response = requests.post(url, json=payload, headers=headers)
         
         if response.status_code == 200:
-            # La risposta di HF viene restituita come lista di dizionari
             result = response.json()
             if isinstance(result, list) and len(result) > 0:
                 return result[0].get('generated_text', 'Nessuna risposta generata.')
             else:
                 return "Formato risposta imprevisto."
         elif response.status_code == 503:
-            # Modello in cold boot (comune nella versione gratuita dopo periodi di inattività)
             return "⏳ Il modello si sta riscaldando... Riprova tra 20 secondi."
         else:
             return f"❌ Errore API: {response.status_code} - {response.text}"
             
     except Exception as e:
         return f"❌ Errore connessione: {str(e)}"
+
+# --- FUNZIONI PRO ---
+
+def generate_meta_description(keyword, intent):
+    """Genera una meta description ottimizzata usando LLM"""
+    prompt = f"""
+    Sei un esperto SEO. Scrivi una meta description accattivante e ottimizzata per la keyword "{keyword}".
+    L'intento dell'utente è: {intent}.
+    Deve essere sotto i 160 caratteri, includere la keyword all'inizio e avere una call to action.
+    Esempio: "Scopri come usare [keyword] per ottenere risultati immediati. Leggi ora!"
+    """
+    return call_llm_hf(prompt)
+
+def generate_viral_title(keyword, intent):
+    """Genera un titolo virale usando LLM"""
+    prompt = f"""
+    Sei un copywriter esperto. Crea 3 titoli virali per un articolo sulla keyword "{keyword}".
+    L'intento dell'utente è: {intent}.
+    Usa formule provate: numeri, aggettivi forti, domande, curiosità.
+    Esempi:
+    - "I 7 Segreti di [keyword] che Nessuno Ti Dice"
+    - "[keyword]: La Guida Definitiva che Cambierà il Tuo Business"
+    - "Perché Tutti Parlano di [keyword]? Ecco la Verità"
+    """
+    return call_llm_hf(prompt)
 
 # --- INTERFACCIA UTENTE ---
 
@@ -252,7 +267,14 @@ if analyze_btn:
             st.divider()
 
             # Tabs per i dettagli
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 Titoli Competitor", "🔑 Parole Chiave LSI", "📝 Struttura Consigliata", "💰 Monetizzazione", "🤖 Assistente AI"])
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+                "🏆 Titoli Competitor", 
+                "🔑 Parole Chiave LSI", 
+                "📝 Struttura Consigliata", 
+                "💰 Monetizzazione", 
+                "🤖 Assistente AI",
+                "✨ Funzionalità PRO"
+            ])
 
             with tab1:
                 st.markdown("Ecco come hanno titolato i tuoi principali competitor:")
@@ -313,6 +335,28 @@ if analyze_btn:
                             st.markdown(answer)
                     else:
                         st.warning("Scrivi una domanda prima di inviare.")
+
+            with tab6:
+                st.markdown("### ✨ Funzionalità PRO Abilitate")
+                
+                # Intento Utente
+                st.subheader("🎯 Intento Utente Rilevato")
+                st.info(f"L'intento principale per '{keyword}' è: **{data['intent']}**")
+                st.caption("Questo aiuta a capire se scrivere una guida, una recensione o un confronto.")
+
+                # Generatore Meta Description
+                st.subheader("📝 Generatore Meta Description AI")
+                if st.button("Genera Meta Description"):
+                    with st.spinner("Sto creando la descrizione perfetta..."):
+                        meta_desc = generate_meta_description(keyword, data['intent'])
+                        st.success(meta_desc)
+
+                # Generatore Titoli Virali
+                st.subheader("🔥 Generatore Titoli Virali")
+                if st.button("Genera Titoli Virali"):
+                    with st.spinner("Sto ideando titoli ad alto CTR..."):
+                        viral_titles = generate_viral_title(keyword, data['intent'])
+                        st.success(viral_titles)
 
 else:
     # Stato iniziale vuoto con immagine placeholder
