@@ -6,6 +6,7 @@ import time
 import nltk
 from collections import Counter
 import random
+import os
 
 # --- CONFIGURAZIONE PAGINA & STILE ---
 st.set_page_config(
@@ -106,6 +107,64 @@ def get_real_data_if_available(api_key, keyword):
         return None 
     return generate_mock_analysis(keyword)
 
+# --- INTEGRAZIONE LLM (HUGGING FACE - GRATUITA) ---
+
+def call_llm_hf(prompt):
+    """
+    Chiama un LLM via Hugging Face Inference API (Gratuito).
+    Usa il modello Mistral-7B-Instruct-v0.2.
+    """
+    
+    # OTTENIAMO LA CHIAVE API DALLE VARIABILI D'AMBIENTE (Streamlit Secrets)
+    # Se sei in locale e non hai impostato le variabili d'ambiente, 
+    # puoi decommentare la riga sotto e inserire la chiave manualmente per test.
+    
+    hf_token = os.getenv("HF_API_KEY")
+    
+    # <--- OPZIONALE: Per test locali senza variabili d'ambiente --->
+    # hf_token = "qui_incolla_il_tuo_token_hf_copiato_da_huggingface" 
+    
+    if not hf_token:
+        return "Errore: Chiave API Hugging Face non configurata. Inserisci HF_API_KEY nei Secrets di Streamlit."
+    
+    # Usiamo Mistral 7B Instruct, un modello molto bravo e veloce
+    model_id = "mistralai/Mistral-7B-Instruct-v0.2"
+    
+    url = f"https://api-inference.huggingface.co/models/{model_id}"
+    
+    headers = {
+        "Authorization": f"Bearer {hf_token}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 500, # Lunghezza massima della risposta
+            "return_full_text": False, # Non ripetere la domanda
+            "temperature": 0.7 # Creatività media
+        }
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            # La risposta di HF viene restituita come lista di dizionari
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                return result[0].get('generated_text', 'Nessuna risposta generata.')
+            else:
+                return "Formato risposta imprevisto."
+        elif response.status_code == 503:
+            # Modello in cold boot (comune nella versione gratuita dopo periodi di inattività)
+            return "⏳ Il modello si sta riscaldando... Riprova tra 20 secondi."
+        else:
+            return f"❌ Errore API: {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        return f"❌ Errore connessione: {str(e)}"
+
 # --- INTERFACCIA UTENTE ---
 
 # Sidebar Branding
@@ -193,7 +252,7 @@ if analyze_btn:
             st.divider()
 
             # Tabs per i dettagli
-            tab1, tab2, tab3, tab4 = st.tabs(["🏆 Titoli Competitor", "🔑 Parole Chiave LSI", "📝 Struttura Consigliata", "💰 Monetizzazione"])
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 Titoli Competitor", "🔑 Parole Chiave LSI", "📝 Struttura Consigliata", "💰 Monetizzazione", "🤖 Assistente AI"])
 
             with tab1:
                 st.markdown("Ecco come hanno titolato i tuoi principali competitor:")
@@ -229,14 +288,31 @@ if analyze_btn:
             with tab4:
                 st.markdown("### 💎 Sblocca il Potenziale Completo")
                 st.markdown("La versione gratuita ti dà una panoramica. Con il piano Pro ottieni:")
-                st.markdown("✅ Export PDF del Report Completo")
-                st.markdown("✅ Analisi dei Backlink dei Competitor")
-                st.markdown("✅ Generatore di Meta Description AI")
-                st.markdown("✅ Monitoraggio Posizioni Settimanale")
+                st.markdown("- ✅ Export PDF del Report Completo")
+                st.markdown("- ✅ Analisi dei Backlink dei Competitor")
+                st.markdown("- ✅ Generatore di Meta Description AI")
+                st.markdown("- ✅ Monitoraggio Posizioni Settimanale")
                 
                 st.divider()
                 if st.button("🔓 Acquista Piano Pro - €29/mese", type="primary"):
                     st.success("Grazie! Reindirizzamento al checkout sicuro...")
+
+            with tab5:
+                st.markdown("### 🤖 Chiedi al Tuo Assistente SEO")
+                user_question = st.text_area("Chiedi qualsiasi cosa sul tuo progetto SEO:", placeholder="Es: Come posso migliorare il mio titolo?")
+                
+                if st.button("Invia Domanda"):
+                    if user_question:
+                        with st.spinner("Sto pensando..."):
+                            prompt = f"""
+                            Sei un esperto SEO senior. Rispondi alla seguente domanda in modo chiaro, conciso e utile.
+                            Keyword target: {keyword}
+                            Domanda: {user_question}
+                            """
+                            answer = call_llm_hf(prompt)
+                            st.markdown(answer)
+                    else:
+                        st.warning("Scrivi una domanda prima di inviare.")
 
 else:
     # Stato iniziale vuoto con immagine placeholder
