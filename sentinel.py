@@ -229,10 +229,10 @@ if analyze_btn:
             with tab4:
                 st.markdown("### 💎 Sblocca il Potenziale Completo")
                 st.markdown("La versione gratuita ti dà una panoramica. Con il piano Pro ottieni:")
-                st.bullet("✅ Export PDF del Report Completo")
-                st.bullet("✅ Analisi dei Backlink dei Competitor")
-                st.bullet("✅ Generatore di Meta Description AI")
-                st.bullet("✅ Monitoraggio Posizioni Settimanale")
+                st.markdown("✅ Export PDF del Report Completo")
+                st.markdown("✅ Analisi dei Backlink dei Competitor")
+                st.markdown("✅ Generatore di Meta Description AI")
+                st.markdown("✅ Monitoraggio Posizioni Settimanale")
                 
                 st.divider()
                 if st.button("🔓 Acquista Piano Pro - €29/mese", type="primary"):
